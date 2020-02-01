@@ -1,0 +1,167 @@
+! ---------------------------------- Pre-pràctica 6 ------------------------------------- !
+! Autor: Javier Rozalén Sarmiento
+! Grup: B1B
+! Data: 19/11/2019
+!
+! Funcionalitat: es programa el mètode d'integració de Montecarlo i es posa a prova amb 
+! diverses funcions a integrar.
+
+program pre_practica6
+    implicit none
+    double precision u,d,pi,integral,error,int1,int2,err1,err2
+    double precision a,b,p,p_x(1000000),M,sumand,g,psi
+    integer k,N,counter
+    common/cts/pi
+    external u,d,p
+    pi=acos(-1.d0)
+    call srand(20034276)
+
+    ! -------------------------------- Execici 1 --------------------------------------- !
+    ! Apartat a)
+    open(11,file="P6-1920-res.dat")
+    a=0.d0
+    b=1.d0
+    do k=1,45000,149
+        call montecarlo(u,a,b,k,integral,error)
+        int1=integral
+        err1=error
+        call montecarlo(d,a,b,k,integral,error)
+        int2=integral
+        err2=error
+        write(11,*) k,int1,err1,int2,err2
+    enddo
+
+    ! Apartat b)
+    M=0.4d0 ! Cota superior
+    N=1000000 ! Número de nombres aleatoris que es vol generar
+    call acceptrebuig(N,p_x,-pi,pi,M,p)
+
+    ! Apartat c)
+    sumand=0.d0
+    integral=0.d0
+    error=0.d0
+    write(11,*) ""
+    write(11,*) ""
+    do k=1,1000000
+        sumand=g(p_x(k))
+        integral=integral+sumand
+        error=error+sumand**2.d0
+        if (mod(k,10000).eq.0) then
+            write(11,*) k,integral/dble(k),dsqrt(1.d0/dble(k))*dsqrt((error/dble(k))-(integral/dble(k)**2.d0))
+        endif
+    enddo
+
+    ! -------------------------------- Execici 2 --------------------------------------- !
+    sumand=0.d0
+    integral=0.d0
+    error=0.d0
+    write(11,*) ""
+    write(11,*) ""
+    do k=1,250000,3
+        sumand=(abs(psi(p_x(k),p_x(k+1),p_x(k+2))))**2.d0 ! Psi és la funció d'ona donada a l'exercici 2
+        sumand=sumand/(p(p_x(k))*p(p_x(k+1))*p(p_x(k+2))) 
+        integral=integral+sumand
+        error=error+sumand**2.d0
+        if (mod(k,10000).eq.0) then
+            write(11,*) k,integral/(dble(k)/3.d0),dsqrt(1.d0/dble(k))*dsqrt((error/dble(k))-(integral/dble(k)**2.d0))
+        endif
+    enddo
+    ! Com es podrà apreciar a l'arxiu de dades, la integral no convergeix al valor correcte; de fet, ni tan sols
+    ! sembla convergir. No he sabut trobar l'error (deixant de banda que no es representen el nombre de sumands que
+    ! es demana)
+
+    close(11)
+end program pre_practica6
+
+! Subrutina montecarlo --> Calcula una integral definida pel mètode de Montecarlo cru
+subroutine montecarlo(funci,a,b,N,integral,error)
+    implicit none
+    double precision a,b,funci,integral,x_k,error,sumand
+    integer N,k
+    integral=0.d0
+    error=0.d0
+    do k=1,N
+        x_k=rand()
+        sumand=funci((b-a)*x_k+a)
+        integral=integral+sumand
+        error=error+sumand**2.d0
+    enddo
+    integral=integral*(b-a)/dble(N)
+    error=(dble(N))**(-0.5d0)*((error*((b-a)**2.d0)/dble(N))-integral**2.d0)**0.5d0
+    return
+end subroutine montecarlo
+
+! Subrutina acceptrebuig --> Genera nombres aleatoris distribuits segons funci
+subroutine acceptrebuig(ndat,xnums,a,b,M,funci)
+    implicit none
+    double precision xnums(ndat),a,b,M,funci,x1,x2,p,x
+    double precision valmitj,var,desvest
+    integer ndat,iseed,counter,i
+    counter=0
+
+    ! Generació dels nombres aleatoris
+1   x1=rand()
+    x2=rand()
+    x=(b-a)*x1+a
+    p=M*x2
+    if (funci(x).ge.p) then 
+        xnums(counter)=x
+        counter=counter+1
+        if (counter.le.ndat) then 
+            goto 1
+        endif
+    else 
+        goto 1
+    endif
+    return
+end subroutine acceptrebuig
+
+! Funció u --> Funció donada al primer apartat
+double precision function u(x)
+    implicit none
+    double precision x
+    if (x.gt.0.0000001) then
+        u=(1.d0/x)*5.109d0*x**0.8002d0*(1.d0-x)**3.d0
+    endif
+    return
+end function u
+
+! Funció d --> Funció donada al primer apartat
+double precision function d(x)
+    implicit none
+    double precision x
+    if (x.gt.0.0000001) then
+        d=(1.d0/x)*3.058d0*x**0.803d0*(1.d0-x)**4.d0
+    endif
+    return
+end function d
+
+! Funció p --> Distribució donada a l'apartat b)
+double precision function p(x)
+    implicit none
+    double precision x,pi
+    common/cts/pi
+    p=(1.d0/pi)*(dsin((pi*(x-pi))/2.d0*pi))**2.d0
+    return
+end function p
+
+! Funció g --> Distribució donada a l'apartat b)
+double precision function g(x)
+    implicit none
+    double precision x,pi
+    common/cts/pi
+    g=(dsin((8.d0*pi*(x-pi))/(2.d0*pi)))**2.d0
+    return
+end function g
+
+! Funció g --> Funció d'ona donada a l'exercici 2
+double precision function psi(x1,x2,x3)
+    implicit none
+    double precision x1,x2,x3,pi
+    common/cts/pi
+    psi=dsin((pi*(x1-pi))/(2.d0*pi))*dsin((pi*(x2-pi))/(2.d0*pi))*dsin((pi*(x3-pi))/(2.d0*pi))
+    psi=psi*(dcos((pi*(x1-pi)))-dcos((pi*(x2-pi))))
+    psi=psi*(dcos((pi*(x2-pi)))-dcos((pi*(x3-pi))))
+    psi=psi*(dcos((pi*(x1-pi)))-dcos((pi*(x3-pi))))
+    return
+end function psi
